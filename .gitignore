@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment and secrets
+.env
+
+# Local process artifacts
+instructions.md
+README.docker.md
+
+# Editor
+.vscode/
+.DS_Store

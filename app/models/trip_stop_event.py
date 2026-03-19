@@ -10,8 +10,8 @@ class TripStopEvent(Base):
     stop_id = Column(Integer, ForeignKey("stop.stop_id"))
     arrived_at = Column(DateTime)
     departed_at = Column(DateTime)
-    boarded_count = Column(Integer)
-    alighted_count = Column(Integer)
+    boarded_count = Column(Integer, nullable=False)
+    alighted_count = Column(Integer, nullable=False)
 
     __table_args__ = (
         CheckConstraint("boarded_count >= 0"),

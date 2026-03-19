@@ -41,7 +41,15 @@ def get_current_user(
             detail="Invalid token"
         )
 
-    user = db.query(User).filter(User.user_id == int(user_id)).first()
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject"
+        )
+
+    user = db.query(User).filter(User.user_id == user_id_int).first()
 
     if user is None:
         raise HTTPException(

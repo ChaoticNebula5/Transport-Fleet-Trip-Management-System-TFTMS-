@@ -9,7 +9,7 @@ class Vehicle(Base):
     registration_no = Column(String(50), unique=True, nullable=False)
     capacity = Column(Integer, nullable=False)
     model = Column(String(100))
-    status = Column(String(50))
+    status = Column(String(50), nullable=False)
     fitness_expiry_date = Column(Date)
     insurance_expiry_date = Column(Date)
 

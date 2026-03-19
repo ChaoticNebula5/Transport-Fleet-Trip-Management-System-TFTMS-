@@ -45,7 +45,8 @@ SELECT
     r.route_code,
     r.route_name,
     i.severity,
-    COUNT(i.incident_id) AS incident_count
+    COUNT(i.incident_id) AS incident_count,
+    MAX(i.reported_at) AS latest_reported_at
 FROM incident i
 JOIN trip t ON i.trip_id = t.trip_id
 JOIN route r ON t.route_id = r.route_id

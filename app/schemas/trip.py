@@ -1,11 +1,11 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import date
 
 
 class TripResponse(BaseModel):
     trip_id: int
     status: str
-    trip_date: datetime | None
+    trip_date: date | None
 
     class Config:
         from_attributes = True

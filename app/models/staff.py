@@ -11,4 +11,4 @@ class Staff(Base):
     phone = Column(String(20))
     staff_type = Column(String(50))
     license_no = Column(String(100), unique=True)
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, nullable=False, default=True)

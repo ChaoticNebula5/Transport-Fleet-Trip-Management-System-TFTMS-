@@ -6,14 +6,14 @@ class Trip(Base):
     __tablename__ = "trip"
 
     trip_id = Column(Integer, primary_key=True, index=True)
-    route_id = Column(Integer, ForeignKey("route.route_id"))
-    vehicle_id = Column(Integer, ForeignKey("vehicle.vehicle_id"))
-    driver_staff_id = Column(Integer, ForeignKey("staff.staff_id"))
+    route_id = Column(Integer, ForeignKey("route.route_id"), nullable=False)
+    vehicle_id = Column(Integer, ForeignKey("vehicle.vehicle_id"), nullable=False)
+    driver_staff_id = Column(Integer, ForeignKey("staff.staff_id"), nullable=False)
     conductor_staff_id = Column(Integer, ForeignKey("staff.staff_id"))
 
-    trip_date = Column(Date)
-    shift = Column(String(50))
-    status = Column(String(50))
+    trip_date = Column(Date, nullable=False)
+    shift = Column(String(50), nullable=False)
+    status = Column(String(50), nullable=False)
 
     actual_start_time = Column(DateTime)
     actual_end_time_claimed = Column(DateTime)

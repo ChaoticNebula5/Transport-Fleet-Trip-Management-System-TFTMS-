@@ -6,9 +6,9 @@ class Stop(Base):
     __tablename__ = "stop"
 
     stop_id = Column(Integer, primary_key=True, index=True)
-    route_id = Column(Integer, ForeignKey("route.route_id", ondelete="CASCADE"))
-    stop_name = Column(String(255))
-    sequence_no = Column(Integer)
+    route_id = Column(Integer, ForeignKey("route.route_id", ondelete="CASCADE"), nullable=False)
+    stop_name = Column(String(255), nullable=False)
+    sequence_no = Column(Integer, nullable=False)
     latitude = Column(Numeric)
     longitude = Column(Numeric)
 
