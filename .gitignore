@@ -14,7 +14,13 @@ venv/
 # Local process artifacts
 instructions.md
 README.docker.md
+memory.md
 
 # Editor
 .vscode/
 .DS_Store
+
+# Node / Frontend
+node_modules/
+dist/
+.turbo/
