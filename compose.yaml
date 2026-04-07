@@ -13,14 +13,14 @@ services:
       retries: 5
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-      - ./sql/views.sql:/docker-entrypoint-initdb.d/02_views.sql:ro
-      - ./sql/procedures.sql:/docker-entrypoint-initdb.d/03_procedures.sql:ro
-      - ./sql/triggers.sql:/docker-entrypoint-initdb.d/04_triggers.sql:ro
+      - ./backend/sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/sql/views.sql:/docker-entrypoint-initdb.d/02_views.sql:ro
+      - ./backend/sql/procedures.sql:/docker-entrypoint-initdb.d/03_procedures.sql:ro
+      - ./backend/sql/triggers.sql:/docker-entrypoint-initdb.d/04_triggers.sql:ro
 
   api:
     build:
-      context: .
+      context: ./backend
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -32,6 +32,16 @@ services:
     ports:
       - 8000:8000
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - 3000:3000
+
 volumes:
   db_data:
-

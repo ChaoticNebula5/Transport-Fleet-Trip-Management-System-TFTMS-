@@ -4,16 +4,82 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 
-from app.core.dependencies import get_db, require_role
+from app.core.dependencies import get_db, get_current_user, require_role
 from app.models.trip import Trip
 from app.models.stop import Stop
 from app.models.trip_stop_event import TripStopEvent
 from app.models.incident import Incident
 from app.models.staff import Staff
+from typing import Optional
 
 router = APIRouter(prefix="/trips", tags=["Trips"])
 logger = logging.getLogger(__name__)
 ALLOWED_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+ALLOWED_TRIP_STATUSES = {"PLANNED", "STARTED", "END_REQUESTED", "COMPLETED", "CANCELLED"}
+
+
+# 0. LIST TRIPS
+@router.get("")
+def list_trips(
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    try:
+        query = db.query(Trip)
+
+        # Drivers/conductors see only their trips
+        if current_user.role in ("DRIVER", "CONDUCTOR"):
+            staff = db.query(Staff).filter(Staff.user_id == current_user.user_id).first()
+            if staff:
+                query = query.filter(
+                    (Trip.driver_staff_id == staff.staff_id)
+                    | (Trip.conductor_staff_id == staff.staff_id)
+                )
+            else:
+                return {"success": True, "page": page, "limit": limit, "total": 0, "data": []}
+
+        if status:
+            normalized = status.strip().upper()
+            if normalized not in ALLOWED_TRIP_STATUSES:
+                raise HTTPException(status_code=400, detail="Invalid status")
+            query = query.filter(Trip.status == normalized)
+
+        total = query.count()
+        trips = (
+            query.order_by(Trip.trip_date.desc(), Trip.trip_id.desc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
+        )
+
+        data = [
+            {
+                "trip_id": t.trip_id,
+                "route_id": t.route_id,
+                "vehicle_id": t.vehicle_id,
+                "driver_staff_id": t.driver_staff_id,
+                "conductor_staff_id": t.conductor_staff_id,
+                "trip_date": str(t.trip_date) if t.trip_date else None,
+                "shift": t.shift,
+                "status": t.status,
+                "actual_start_time": str(t.actual_start_time) if t.actual_start_time else None,
+                "actual_end_time_claimed": str(t.actual_end_time_claimed) if t.actual_end_time_claimed else None,
+                "odometer_start_claimed": float(t.odometer_start_claimed) if t.odometer_start_claimed else None,
+                "odometer_end_claimed": float(t.odometer_end_claimed) if t.odometer_end_claimed else None,
+            }
+            for t in trips
+        ]
+
+        return {"success": True, "page": page, "limit": limit, "total": total, "data": data}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to list trips: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # 1. START TRIP (Driver Only)
