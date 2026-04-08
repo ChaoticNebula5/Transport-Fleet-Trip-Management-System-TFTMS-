@@ -30,6 +30,7 @@ def read_me(current_user=Depends(get_current_user)):
     return {
         "user_id": current_user.user_id,
         "email": current_user.email,
+        "full_name": current_user.full_name,
         "role": current_user.role,
     }
 

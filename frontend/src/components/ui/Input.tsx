@@ -1,5 +1,5 @@
-import { InputHTMLAttributes, forwardRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { forwardRef, useState, type InputHTMLAttributes } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string
@@ -11,12 +11,32 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, icon, className = '', ...props }, ref) => {
     const [focused, setFocused] = useState(false)
     const hasValue = Boolean(props.value || props.defaultValue)
+    const isActive = focused || hasValue
 
     return (
       <div className={`relative ${className}`}>
+        {/* Label — positioned ABOVE the input box when active */}
+        <AnimatePresence>
+          {isActive && (
+            <motion.label
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.15 }}
+              className={`block text-xs font-medium mb-1.5 ${
+                error ? 'text-danger' : focused ? 'text-flux-blue' : 'text-mist'
+              }`}
+            >
+              {label}
+            </motion.label>
+          )}
+        </AnimatePresence>
+
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-ghost z-10">
+            <div className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 transition-colors duration-200 ${
+              focused ? 'text-flux-blue' : 'text-ghost'
+            }`}>
               {icon}
             </div>
           )}
@@ -33,7 +53,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             }}
             className={`
               w-full bg-slate-dark/80 border rounded-lg
-              px-4 py-3 text-sm text-white placeholder-transparent
+              px-4 py-3 text-sm text-white
               transition-all duration-200 focus-ring
               ${icon ? 'pl-10' : ''}
               ${error
@@ -43,28 +63,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                   : 'border-slate-light/30 hover:border-slate-light/50'
               }
             `}
-            placeholder={label}
+            placeholder={isActive ? '' : label}
           />
-          <motion.label
-            animate={{
-              y: focused || hasValue ? -24 : 0,
-              x: focused || hasValue ? (icon ? -28 : 0) : 0,
-              scale: focused || hasValue ? 0.85 : 1,
-              color: error
-                ? '#ef4444'
-                : focused
-                  ? '#3b82f6'
-                  : '#64748b',
-            }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className={`
-              absolute top-3 text-sm pointer-events-none origin-left
-              ${icon ? 'left-10' : 'left-4'}
-            `}
-          >
-            {label}
-          </motion.label>
         </div>
+
         <AnimatePresence>
           {error && (
             <motion.p

@@ -17,6 +17,7 @@ services:
       - ./backend/sql/views.sql:/docker-entrypoint-initdb.d/02_views.sql:ro
       - ./backend/sql/procedures.sql:/docker-entrypoint-initdb.d/03_procedures.sql:ro
       - ./backend/sql/triggers.sql:/docker-entrypoint-initdb.d/04_triggers.sql:ro
+      - ./backend/sql/seed.sql:/docker-entrypoint-initdb.d/05_seed.sql:ro
 
   api:
     build:
@@ -31,6 +32,13 @@ services:
         condition: service_healthy
     ports:
       - 8000:8000
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend/app
+          target: /app/app
+        - action: rebuild
+          path: ./backend/requirements.txt
 
   frontend:
     build:
@@ -42,6 +50,20 @@ services:
       - api
     ports:
       - 3000:3000
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./frontend/src
+          target: /app/src
+        - action: sync+restart
+          path: ./frontend/public
+          target: /app/public
+        - action: rebuild
+          path: ./frontend/package.json
+        - action: rebuild
+          path: ./frontend/package-lock.json
+        - action: rebuild
+          path: ./frontend/vite.config.ts
 
 volumes:
   db_data:

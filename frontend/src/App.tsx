@@ -8,6 +8,7 @@ import ToastContainer from './components/ui/Toast'
 import { useAuthStore } from './stores/authStore'
 
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const TripsPage = lazy(() => import('./pages/TripsPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
@@ -47,7 +48,6 @@ export default function App() {
   const location = useLocation()
   const { isAuthenticated, token, fetchMe } = useAuthStore()
 
-  // Rehydrate user on mount if token exists
   useEffect(() => {
     if (token && !useAuthStore.getState().user) {
       fetchMe()
@@ -62,7 +62,7 @@ export default function App() {
       <AnimatePresence mode="wait">
         <Suspense fallback={<PageLoader />}>
           <Routes location={location} key={location.pathname}>
-            {/* Public */}
+            {/* Public — Login */}
             <Route
               path="/login"
               element={
@@ -71,6 +71,20 @@ export default function App() {
                 ) : (
                   <PageTransition>
                     <LoginPage />
+                  </PageTransition>
+                )
+              }
+            />
+
+            {/* Public — Register */}
+            <Route
+              path="/register"
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/dashboard" replace />
+                ) : (
+                  <PageTransition>
+                    <RegisterPage />
                   </PageTransition>
                 )
               }

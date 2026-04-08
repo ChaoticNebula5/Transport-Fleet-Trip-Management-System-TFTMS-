@@ -1,7 +1,7 @@
-import { useState, FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Mail, Lock, Zap } from 'lucide-react'
+import { Mail, Lock, Bus } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -47,15 +47,15 @@ export default function LoginPage() {
       >
         {/* Card */}
         <div className="glass-strong rounded-2xl p-8 shadow-2xl border border-slate-light/10">
-          {/* Header */}
+          {/* Header with Bus Logo */}
           <div className="text-center mb-8">
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
+              initial={{ scale: 0, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.1 }}
-              className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-flux-blue to-flux-cyan flex items-center justify-center shadow-lg shadow-flux-blue/25"
+              className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-flux-blue via-flux-indigo to-flux-cyan flex items-center justify-center shadow-lg shadow-flux-blue/30"
             >
-              <Zap size={24} className="text-white" />
+              <Bus size={28} className="text-white" />
             </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
@@ -63,7 +63,7 @@ export default function LoginPage() {
               transition={{ delay: 0.2 }}
               className="text-2xl font-bold text-white mb-1"
             >
-              Fleet Command
+              Welcome Back
             </motion.h1>
             <motion.p
               initial={{ opacity: 0 }}
@@ -71,12 +71,12 @@ export default function LoginPage() {
               transition={{ delay: 0.3 }}
               className="text-sm text-mist"
             >
-              Sign in to your TFTMS account
+              Sign in to Fleet Command
             </motion.p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -120,6 +120,7 @@ export default function LoginPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
+              className="pt-2"
             >
               <Button
                 type="submit"
@@ -131,6 +132,24 @@ export default function LoginPage() {
               </Button>
             </motion.div>
           </form>
+
+          {/* Register link */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="mt-6 text-center"
+          >
+            <p className="text-sm text-ghost">
+              Don't have an account?{' '}
+              <Link
+                to="/register"
+                className="text-flux-blue hover:text-flux-cyan font-medium transition-colors"
+              >
+                Create one
+              </Link>
+            </p>
+          </motion.div>
         </div>
 
         {/* Footer */}

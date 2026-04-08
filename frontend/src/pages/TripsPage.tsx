@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Bus, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
-import { tripsApi, TripRow } from '../api/endpoints'
+import { Bus, Filter, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { tripsApi, type TripRow } from '../api/endpoints'
 import { useUIStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
 import DataTable from '../components/ui/DataTable'
@@ -12,6 +12,38 @@ import Input from '../components/ui/Input'
 import { useToastStore } from '../components/ui/Toast'
 
 const STATUSES = ['ALL', 'PLANNED', 'STARTED', 'END_REQUESTED', 'COMPLETED', 'CANCELLED']
+const SHIFTS = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT']
+
+interface LookupRoute {
+  route_id: number
+  route_code: string
+  route_name: string
+  start_point: string
+  end_point: string
+}
+interface LookupVehicle {
+  vehicle_id: number
+  registration_no: string
+  model: string
+  capacity: number
+}
+interface LookupStaff {
+  staff_id: number
+  full_name: string
+  staff_type: string
+  license_no: string
+}
+
+const getApiErrorMessage = (err: any, fallback: string) => {
+  const detail = err?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0]
+    if (typeof first === 'string' && first.trim()) return first
+    if (first?.msg) return String(first.msg)
+  }
+  return fallback
+}
 
 export default function TripsPage() {
   const markVisited = useUIStore((s) => s.markVisited)
@@ -33,6 +65,22 @@ export default function TripsPage() {
   const [odometerValue, setOdometerValue] = useState('')
   const [incidentForm, setIncidentForm] = useState({ severity: 'LOW', category: '', description: '' })
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Create Trip modal
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    route_id: 0,
+    vehicle_id: 0,
+    driver_staff_id: 0,
+    conductor_staff_id: 0,
+    trip_date: '',
+    shift: 'MORNING',
+  })
+  const [lookupRoutes, setLookupRoutes] = useState<LookupRoute[]>([])
+  const [lookupVehicles, setLookupVehicles] = useState<LookupVehicle[]>([])
+  const [lookupDrivers, setLookupDrivers] = useState<LookupStaff[]>([])
+  const [lookupConductors, setLookupConductors] = useState<LookupStaff[]>([])
 
   useEffect(() => {
     markVisited('/trips')
@@ -59,8 +107,62 @@ export default function TripsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
+  // Load lookups when create modal opens
+  const openCreateModal = async () => {
+    setShowCreateModal(true)
+    setCreateForm({ route_id: 0, vehicle_id: 0, driver_staff_id: 0, conductor_staff_id: 0, trip_date: '', shift: 'MORNING' })
+    try {
+      const [rRes, vRes, dRes, cRes] = await Promise.all([
+        tripsApi.lookupRoutes(),
+        tripsApi.lookupVehicles(),
+        tripsApi.lookupStaff('DRIVER'),
+        tripsApi.lookupStaff('CONDUCTOR'),
+      ])
+      setLookupRoutes(rRes.data)
+      setLookupVehicles(vRes.data)
+      setLookupDrivers(dRes.data)
+      setLookupConductors(cRes.data)
+    } catch {
+      toast('error', 'Failed to load lookup data')
+    }
+  }
+
+  const submitCreateTrip = async () => {
+    if (!createForm.route_id || !createForm.vehicle_id || !createForm.driver_staff_id || !createForm.trip_date) {
+      toast('error', 'Please fill all required fields')
+      return
+    }
+    setCreateLoading(true)
+    try {
+      await tripsApi.create({
+        route_id: createForm.route_id,
+        vehicle_id: createForm.vehicle_id,
+        driver_staff_id: createForm.driver_staff_id,
+        conductor_staff_id: createForm.conductor_staff_id || null,
+        trip_date: createForm.trip_date,
+        shift: createForm.shift,
+      })
+      toast('success', 'Trip created successfully!')
+      setShowCreateModal(false)
+      loadTrips()
+    } catch (err: any) {
+      toast('error', err.response?.data?.detail || 'Failed to create trip')
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
   const executeAction = async () => {
     if (!actionModal) return
+
+    if (actionModal.type === 'start' || actionModal.type === 'end' || actionModal.type === 'verify') {
+      const reading = Number(odometerValue)
+      if (!Number.isFinite(reading) || reading <= 0) {
+        toast('error', 'Please enter a valid odometer value greater than 0')
+        return
+      }
+    }
+
     setActionLoading(true)
     try {
       switch (actionModal.type) {
@@ -95,7 +197,7 @@ export default function TripsPage() {
       setIncidentForm({ severity: 'LOW', category: '', description: '' })
       loadTrips()
     } catch (err: any) {
-      toast('error', err.response?.data?.detail || 'Action failed')
+      toast('error', getApiErrorMessage(err, 'Action failed'))
     } finally {
       setActionLoading(false)
     }
@@ -173,6 +275,8 @@ export default function TripsPage() {
       }[actionModal.type]
     : ''
 
+  const canCreate = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
       {/* Header */}
@@ -187,26 +291,36 @@ export default function TripsPage() {
           </div>
         </div>
 
-        {/* Status Filter */}
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-ghost" />
-          <div className="flex gap-1 p-1 rounded-xl bg-slate-dark/50 border border-slate-light/10">
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setStatusFilter(s)
-                  setPage(1)
-                }}
-                className={`px-3 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer ${
-                  statusFilter === s
-                    ? 'bg-flux-blue/20 text-flux-blue'
-                    : 'text-ghost hover:text-mist'
-                }`}
-              >
-                {s === 'ALL' ? 'All' : s.replace('_', ' ')}
-              </button>
-            ))}
+        <div className="flex items-center gap-3">
+          {/* Create Trip Button */}
+          {canCreate && (
+            <Button size="sm" onClick={openCreateModal}>
+              <Plus size={14} className="mr-1.5" />
+              New Trip
+            </Button>
+          )}
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-ghost" />
+            <div className="flex gap-1 p-1 rounded-xl bg-slate-dark/50 border border-slate-light/10">
+              {STATUSES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setStatusFilter(s)
+                    setPage(1)
+                  }}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer ${
+                    statusFilter === s
+                      ? 'bg-flux-blue/20 text-flux-blue'
+                      : 'text-ghost hover:text-mist'
+                  }`}
+                >
+                  {s === 'ALL' ? 'All' : s.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -229,7 +343,120 @@ export default function TripsPage() {
         </div>
       </div>
 
-      {/* Action Modal */}
+      {/* ---- CREATE TRIP MODAL ---- */}
+      <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="Schedule New Trip">
+        <div className="space-y-4">
+          {/* Route */}
+          <div>
+            <label className="text-xs text-mist mb-1.5 block font-medium">Route *</label>
+            <select
+              value={createForm.route_id}
+              onChange={(e) => setCreateForm((f) => ({ ...f, route_id: Number(e.target.value) }))}
+              className="w-full bg-slate-dark/80 border border-slate-light/30 rounded-lg px-4 py-3 text-sm text-white focus-ring appearance-none cursor-pointer"
+            >
+              <option value={0}>Select a route...</option>
+              {lookupRoutes.map((r) => (
+                <option key={r.route_id} value={r.route_id}>
+                  [{r.route_code}] {r.route_name} ({r.start_point} → {r.end_point})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Vehicle */}
+          <div>
+            <label className="text-xs text-mist mb-1.5 block font-medium">Vehicle *</label>
+            <select
+              value={createForm.vehicle_id}
+              onChange={(e) => setCreateForm((f) => ({ ...f, vehicle_id: Number(e.target.value) }))}
+              className="w-full bg-slate-dark/80 border border-slate-light/30 rounded-lg px-4 py-3 text-sm text-white focus-ring appearance-none cursor-pointer"
+            >
+              <option value={0}>Select a vehicle...</option>
+              {lookupVehicles.map((v) => (
+                <option key={v.vehicle_id} value={v.vehicle_id}>
+                  {v.registration_no} — {v.model} (Cap: {v.capacity})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Driver */}
+          <div>
+            <label className="text-xs text-mist mb-1.5 block font-medium">Driver *</label>
+            <select
+              value={createForm.driver_staff_id}
+              onChange={(e) => setCreateForm((f) => ({ ...f, driver_staff_id: Number(e.target.value) }))}
+              className="w-full bg-slate-dark/80 border border-slate-light/30 rounded-lg px-4 py-3 text-sm text-white focus-ring appearance-none cursor-pointer"
+            >
+              <option value={0}>Select a driver...</option>
+              {lookupDrivers.map((s) => (
+                <option key={s.staff_id} value={s.staff_id}>
+                  {s.full_name} {s.license_no ? `(${s.license_no})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Conductor (optional) */}
+          <div>
+            <label className="text-xs text-mist mb-1.5 block font-medium">Conductor <span className="text-ghost">(optional)</span></label>
+            <select
+              value={createForm.conductor_staff_id}
+              onChange={(e) => setCreateForm((f) => ({ ...f, conductor_staff_id: Number(e.target.value) }))}
+              className="w-full bg-slate-dark/80 border border-slate-light/30 rounded-lg px-4 py-3 text-sm text-white focus-ring appearance-none cursor-pointer"
+            >
+              <option value={0}>None</option>
+              {lookupConductors.map((s) => (
+                <option key={s.staff_id} value={s.staff_id}>
+                  {s.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date & Shift row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Input
+                label="Trip Date"
+                type="date"
+                value={createForm.trip_date}
+                onChange={(e) => setCreateForm((f) => ({ ...f, trip_date: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-mist mb-1.5 block font-medium">Shift *</label>
+              <div className="flex gap-1.5">
+                {SHIFTS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setCreateForm((f) => ({ ...f, shift: s }))}
+                    className={`flex-1 px-2 py-2 text-xs rounded-lg font-medium transition-all cursor-pointer border ${
+                      createForm.shift === s
+                        ? 'bg-flux-blue/15 text-flux-blue border-flux-blue/30'
+                        : 'bg-slate-dark/50 text-ghost border-slate-light/10 hover:border-slate-light/30'
+                    }`}
+                  >
+                    {s.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button loading={createLoading} onClick={submitCreateTrip}>
+              <Plus size={14} className="mr-1.5" />
+              Create Trip
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ---- ACTION MODALS (start/end/verify/cancel/incident) ---- */}
       <Modal open={!!actionModal} onClose={() => setActionModal(null)} title={modalTitle}>
         {actionModal?.type === 'cancel' ? (
           <div className="space-y-4">

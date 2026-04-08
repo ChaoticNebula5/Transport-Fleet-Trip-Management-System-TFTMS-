@@ -74,42 +74,32 @@ $$;
 
 
 
--- 3. batch_cancel_old_planned_trips (Cursor + SAVEPOINT)
+-- 3. batch_cancel_old_planned_trips (Exception-safe batch update)
 
 CREATE OR REPLACE PROCEDURE batch_cancel_old_planned_trips()
 LANGUAGE plpgsql
 AS $$
 DECLARE
     rec RECORD;
-    trip_cursor CURSOR FOR
+BEGIN
+    FOR rec IN
         SELECT trip_id
         FROM trip
         WHERE status = 'PLANNED'
-        AND trip_date < CURRENT_DATE;
-BEGIN
-
-    OPEN trip_cursor;
-
+        AND trip_date < CURRENT_DATE
     LOOP
-        FETCH trip_cursor INTO rec;
-        EXIT WHEN NOT FOUND;
 
         BEGIN
-            SAVEPOINT sp_cancel;
-
             UPDATE trip
             SET status = 'CANCELLED'
             WHERE trip_id = rec.trip_id;
 
         EXCEPTION
             WHEN OTHERS THEN
-                ROLLBACK TO SAVEPOINT sp_cancel;
                 RAISE NOTICE 'Failed to cancel trip %', rec.trip_id;
         END;
 
     END LOOP;
-
-    CLOSE trip_cursor;
 
 END;
 $$;

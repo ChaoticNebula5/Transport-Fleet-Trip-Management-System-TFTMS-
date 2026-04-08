@@ -114,8 +114,8 @@ function Particles() {
 
 function ConnectionLines() {
   const lineRef = useRef<THREE.LineSegments>(null)
-  const positionsRef = useRef<Float32Array>()
-  const colorsRef = useRef<Float32Array>()
+  const positionsRef = useRef<Float32Array | null>(null)
+  const colorsRef = useRef<Float32Array | null>(null)
 
   const maxConnections = 600
   const connectionDistance = 2.5
@@ -205,6 +205,9 @@ export default function ParticleField() {
         <Particles />
         <ConnectionLines />
       </Canvas>
+      
+      {/* Heavy Blur + Darkening Overlay for Text Readability */}
+      <div className="absolute inset-0 pointer-events-none backdrop-blur-xl bg-[#050810]/70" />
     </div>
   )
 }

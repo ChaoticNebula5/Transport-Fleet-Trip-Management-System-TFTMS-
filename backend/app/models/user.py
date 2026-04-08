@@ -9,6 +9,7 @@ class User(Base):
 
     user_id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False)
+    full_name = Column(String(255), nullable=False)
     password_hash = Column(Text, nullable=False)
     role = Column(String(50), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)

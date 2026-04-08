@@ -2,6 +2,7 @@
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(50) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -143,6 +144,12 @@ CREATE TABLE incident (
     severity VARCHAR(50) NOT NULL,
     category VARCHAR(100),
     description TEXT,
+    encountered_by_staff_id INTEGER REFERENCES staff(staff_id),
+    encountered_by_full_name VARCHAR(255),
+    route_id_snapshot INTEGER,
+    route_code_snapshot VARCHAR(50),
+    route_name_snapshot VARCHAR(255),
+    trip_snapshot JSONB,
     reported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     reported_by_user_id INTEGER REFERENCES users(user_id)
 );

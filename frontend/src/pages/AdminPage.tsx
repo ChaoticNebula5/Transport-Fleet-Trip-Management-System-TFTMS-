@@ -13,6 +13,7 @@ import { useToastStore } from '../components/ui/Toast'
 interface UserRow {
   user_id: number
   email: string
+  full_name: string
   role: string
   is_active: boolean
 }
@@ -31,13 +32,14 @@ export default function AdminPage() {
 
   // Edit modal
   const [editUser, setEditUser] = useState<UserRow | null>(null)
+  const [editFullName, setEditFullName] = useState('')
   const [editRole, setEditRole] = useState('')
   const [editActive, setEditActive] = useState(true)
   const [saving, setSaving] = useState(false)
 
   // Register modal
   const [showRegister, setShowRegister] = useState(false)
-  const [regForm, setRegForm] = useState({ email: '', password: '', role: 'DRIVER' })
+  const [regForm, setRegForm] = useState({ full_name: '', email: '', password: '', role: 'DRIVER' })
   const [registering, setRegistering] = useState(false)
 
   useEffect(() => { markVisited('/admin') }, [])
@@ -62,15 +64,20 @@ export default function AdminPage() {
 
   const openEdit = (user: UserRow) => {
     setEditUser(user)
+    setEditFullName(user.full_name)
     setEditRole(user.role)
     setEditActive(user.is_active)
   }
 
   const saveEdit = async () => {
     if (!editUser) return
+    if (!editFullName.trim()) {
+      toast('error', 'Full name is required')
+      return
+    }
     setSaving(true)
     try {
-      await authApi.updateUser(editUser.user_id, { role: editRole, is_active: editActive })
+      await authApi.updateUser(editUser.user_id, { role: editRole, is_active: editActive, full_name: editFullName.trim() })
       toast('success', `User ${editUser.email} updated`)
       setEditUser(null)
       loadUsers()
@@ -82,12 +89,16 @@ export default function AdminPage() {
   }
 
   const registerUser = async () => {
+    if (!regForm.full_name.trim()) {
+      toast('error', 'Full name is required')
+      return
+    }
     setRegistering(true)
     try {
-      await authApi.register(regForm.email, regForm.password, regForm.role)
+      await authApi.register(regForm.email, regForm.password, regForm.role, regForm.full_name.trim())
       toast('success', `User ${regForm.email} created`)
       setShowRegister(false)
-      setRegForm({ email: '', password: '', role: 'DRIVER' })
+      setRegForm({ full_name: '', email: '', password: '', role: 'DRIVER' })
       loadUsers()
     } catch (err: any) {
       toast('error', err.response?.data?.detail || 'Registration failed')
@@ -98,6 +109,7 @@ export default function AdminPage() {
 
   const columns = [
     { key: 'user_id', header: 'ID', className: 'w-16' },
+    { key: 'full_name', header: 'Full Name' },
     { key: 'email', header: 'Email' },
     {
       key: 'role',
@@ -164,6 +176,12 @@ export default function AdminPage() {
       {/* Edit User Modal */}
       <Modal open={!!editUser} onClose={() => setEditUser(null)} title={`Edit User — ${editUser?.email || ''}`}>
         <div className="space-y-4">
+          <Input
+            label="Full Name"
+            value={editFullName}
+            onChange={(e) => setEditFullName(e.target.value)}
+          />
+
           <div>
             <label className="text-xs text-mist mb-2 block">Role</label>
             <div className="flex gap-2 flex-wrap">
@@ -209,6 +227,11 @@ export default function AdminPage() {
       {/* Register Modal */}
       <Modal open={showRegister} onClose={() => setShowRegister(false)} title="Register New User">
         <div className="space-y-4">
+          <Input
+            label="Full Name"
+            value={regForm.full_name}
+            onChange={(e) => setRegForm((f) => ({ ...f, full_name: e.target.value }))}
+          />
           <Input
             label="Email"
             type="email"
