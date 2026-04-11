@@ -290,15 +290,17 @@ def _create_sql_objects(db: Session) -> None:
         if os.path.exists(filepath):
             with open(filepath, "r") as f:
                 sql_content = f.read()
-            # Execute each statement separately (split on semicolons)
-            for statement in sql_content.split(";"):
-                stmt = statement.strip()
-                if stmt and not stmt.startswith("--"):
-                    try:
-                        db.execute(text(stmt))
-                    except Exception as e:
-                        logger.warning("[SEED] SQL object warning (%s): %s", filename, e)
-            logger.info("[SEED] Applied %s", filename)
+            
+            if sql_content.strip():
+                try:
+                    # Execute all content. Savepoint ensures a warning doesn't abort the whole seed transaction.
+                    db.execute(text("SAVEPOINT sql_obj_savepoint"))
+                    db.execute(text(sql_content))
+                    db.execute(text("RELEASE SAVEPOINT sql_obj_savepoint"))
+                    logger.info("[SEED] Applied %s", filename)
+                except Exception as e:
+                    db.execute(text("ROLLBACK TO SAVEPOINT sql_obj_savepoint"))
+                    logger.warning("[SEED] SQL object warning (%s): %s", filename, e)
     
     db.flush()
 
@@ -315,26 +317,44 @@ def run_seed() -> None:
     
     Safe to call on every cold start. Existing data is never touched.
     """
+    # Force logging to actually output on serverless
+    logging.basicConfig(level=logging.INFO)
+
     from app.db.session import SessionLocal
 
     # Step 1: Create tables from SQLAlchemy models
+    print("[SEED] Creating tables if not exist...")
     logger.info("[SEED] Creating tables if not exist...")
     Base.metadata.create_all(bind=engine)
+    print("[SEED] Tables ready")
     logger.info("[SEED] Tables ready")
 
     # Step 2: Seed data
     db = SessionLocal()
     try:
         _seed_users(db)
+        print("[SEED] Users done")
+
         _seed_routes(db)
+        print("[SEED] Routes done")
+
         _seed_vehicles(db)
+        print("[SEED] Vehicles done")
+
         _seed_staff(db)
+        print("[SEED] Staff done")
+
         _create_sql_objects(db)
+        print("[SEED] SQL objects done")
+
         db.commit()
+        print("[SEED] ✅ All seed data committed successfully")
         logger.info("[SEED] All seed data committed successfully")
     except Exception as e:
         db.rollback()
+        print(f"[SEED] ❌ Seeding failed: {e}")
         logger.error("[SEED] Seeding failed: %s", e)
         raise
     finally:
         db.close()
+

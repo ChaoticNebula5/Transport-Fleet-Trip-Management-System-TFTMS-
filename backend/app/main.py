@@ -36,6 +36,7 @@ app = FastAPI(
 _origins = [
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://tftms.vercel.app",
 ]
 if FRONTEND_URL:
     # Support comma-separated list of origins
