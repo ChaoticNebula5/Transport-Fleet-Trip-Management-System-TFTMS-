@@ -1,15 +1,48 @@
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import FRONTEND_URL
 from app.core.dependencies import get_current_user, require_role
 from app.api.routes.auth import router as auth_router
 from app.api.routes.trip import router as trip_router
 from app.api.routes.reports import router as reports_router
 
-app = FastAPI(title="TFTMS Backend")
+logger = logging.getLogger(__name__)
+
+
+# ── Lifespan: DB init + seed on startup ──────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run once on cold start: create tables and seed data."""
+    from app.seed import run_seed
+    try:
+        logger.info("[STARTUP] Running database init and seed...")
+        run_seed()
+        logger.info("[STARTUP] Database ready")
+    except Exception as e:
+        logger.error("[STARTUP] Seed failed (non-fatal): %s", e)
+    yield
+
+
+app = FastAPI(
+    title="TFTMS Backend",
+    lifespan=lifespan,
+)
+
+# ── CORS ─────────────────────────────────────────────────────────────────
+# Build origins list dynamically from env
+_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+if FRONTEND_URL:
+    # Support comma-separated list of origins
+    _origins.extend([o.strip() for o in FRONTEND_URL.split(",") if o.strip()])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,7 +73,4 @@ def admin_only(current_user=Depends(require_role(["ADMIN"]))):
     return {"message": "Admin access granted"}
 
 
-
-
 # uvicorn app.main:app --reload
-

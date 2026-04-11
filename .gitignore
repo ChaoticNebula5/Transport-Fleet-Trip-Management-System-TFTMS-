@@ -15,6 +15,16 @@ venv/
 instructions.md
 README.docker.md
 memory.md
+guide.md
+
+# Backend local verification/agent scripts
+backend/agents/
+backend/*agent*.py
+backend/endpoint_flow_check.py
+backend/endpoint_flow_verify_resilient.py
+
+# Local GitHub Copilot agent definition
+.github/agents/endpoint-flow-verifier.agent.md
 
 # Editor
 .vscode/

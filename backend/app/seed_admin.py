@@ -25,6 +25,7 @@ from app.core.security import hash_password
 
 ADMIN_EMAIL = "hssinghlubana11@gmail.com"
 ADMIN_PASSWORD = "Admin@321"
+ADMIN_FULL_NAME = "System Administrator"
 ADMIN_ROLE = "ADMIN"
 
 
@@ -38,6 +39,7 @@ def seed_admin():
 
         admin = User(
             email=ADMIN_EMAIL,
+            full_name=ADMIN_FULL_NAME,
             password_hash=hash_password(ADMIN_PASSWORD),
             role=ADMIN_ROLE,
             is_active=True,

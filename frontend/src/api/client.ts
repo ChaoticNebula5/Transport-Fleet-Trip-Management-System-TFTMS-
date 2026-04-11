@@ -1,7 +1,9 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// In production (Vercel): VITE_API_URL is unset → defaults to '/api' (same origin)
+// In development: Vite proxy forwards /api/* to http://localhost:8000 (strips /api)
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 const client = axios.create({
   baseURL: API_URL,

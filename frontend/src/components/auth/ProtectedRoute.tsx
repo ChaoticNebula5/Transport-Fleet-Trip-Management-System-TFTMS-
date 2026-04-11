@@ -13,7 +13,12 @@ export default function ProtectedRoute({ children, roles }: ProtectedRouteProps)
     return <Navigate to="/login" replace />
   }
 
-  if (roles && user && !roles.includes(user.role)) {
+  // Still loading user profile after token restore — wait before rendering
+  if (!user) {
+    return null
+  }
+
+  if (roles && !roles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />
   }
 

@@ -18,3 +18,9 @@ README.md
 README.docker.md
 memory.md
 instructions.md
+guide.md
+backend/agents/
+backend/*agent*.py
+backend/endpoint_flow_check.py
+backend/endpoint_flow_verify_resilient.py
+.github/agents/endpoint-flow-verifier.agent.md
