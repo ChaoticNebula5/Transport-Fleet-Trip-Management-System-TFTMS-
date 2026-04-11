@@ -34,3 +34,4 @@ backend/endpoint_flow_verify_resilient.py
 node_modules/
 dist/
 .turbo/
+venv/
