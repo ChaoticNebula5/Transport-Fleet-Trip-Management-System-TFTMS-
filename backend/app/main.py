@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import FRONTEND_URL
+from app.core.config import FRONTEND_URL, ENVIRONMENT
 from app.core.dependencies import get_current_user, require_role
 from app.api.routes.auth import router as auth_router
 from app.api.routes.trip import router as trip_router
@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="TFTMS Backend",
+    root_path="/api" if ENVIRONMENT == "production" else "",
     lifespan=lifespan,
 )
 
