@@ -59,12 +59,22 @@ export default function TripsPage() {
 
   // Action modals
   const [actionModal, setActionModal] = useState<{
-    type: 'start' | 'end' | 'verify' | 'cancel' | 'incident'
+    type: 'start' | 'end' | 'verify' | 'cancel' | 'incident' | 'stop'
     trip: TripRow
   } | null>(null)
   const [odometerValue, setOdometerValue] = useState('')
   const [incidentForm, setIncidentForm] = useState({ severity: 'LOW', category: '', description: '' })
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Record Stop modal state
+  interface StopInfo {
+    vehicle_capacity: number
+    current_on_bus: number
+    stops: { stop_id: number; stop_name: string; sequence_no: number; already_recorded: boolean }[]
+  }
+  const [stopInfo, setStopInfo] = useState<StopInfo | null>(null)
+  const [stopForm, setStopForm] = useState({ stop_id: 0, boarded: 0, alighted: 0 })
+  const [stopInfoLoading, setStopInfoLoading] = useState(false)
 
   // Create Trip modal
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -85,6 +95,19 @@ export default function TripsPage() {
   useEffect(() => {
     markVisited('/trips')
   }, [])
+
+  // Fetch stop info whenever the Record Stop modal opens
+  useEffect(() => {
+    if (actionModal?.type === 'stop') {
+      setStopInfoLoading(true)
+      setStopInfo(null)
+      setStopForm({ stop_id: 0, boarded: 0, alighted: 0 })
+      tripsApi.getStopInfo(actionModal.trip.trip_id)
+        .then((res) => setStopInfo(res.data))
+        .catch(() => toast('error', 'Failed to load stop info'))
+        .finally(() => setStopInfoLoading(false))
+    }
+  }, [actionModal])
 
   const loadTrips = useCallback(async () => {
     setLoading(true)
@@ -191,10 +214,26 @@ export default function TripsPage() {
           )
           toast('success', 'Incident reported')
           break
+        case 'stop':
+          if (!stopForm.stop_id) {
+            toast('error', 'Please select a stop')
+            setActionLoading(false)
+            return
+          }
+          await tripsApi.recordStop(
+            actionModal.trip.trip_id,
+            stopForm.stop_id,
+            stopForm.boarded,
+            stopForm.alighted
+          )
+          toast('success', 'Stop recorded successfully')
+          break
       }
       setActionModal(null)
       setOdometerValue('')
       setIncidentForm({ severity: 'LOW', category: '', description: '' })
+      setStopInfo(null)
+      setStopForm({ stop_id: 0, boarded: 0, alighted: 0 })
       loadTrips()
     } catch (err: any) {
       toast('error', getApiErrorMessage(err, 'Action failed'))
@@ -205,13 +244,16 @@ export default function TripsPage() {
 
   const getActions = (trip: TripRow) => {
     const role = user?.role || ''
-    const actions: { label: string; type: 'start' | 'end' | 'verify' | 'cancel' | 'incident'; variant: 'primary' | 'secondary' | 'danger' | 'ghost' }[] = []
+    const actions: { label: string; type: 'start' | 'end' | 'verify' | 'cancel' | 'incident' | 'stop'; variant: 'primary' | 'secondary' | 'danger' | 'ghost' }[] = []
 
     if (trip.status === 'PLANNED' && role === 'DRIVER') {
       actions.push({ label: 'Start', type: 'start', variant: 'primary' })
     }
     if (trip.status === 'STARTED' && role === 'DRIVER') {
       actions.push({ label: 'End', type: 'end', variant: 'secondary' })
+    }
+    if (trip.status === 'STARTED' && role === 'CONDUCTOR') {
+      actions.push({ label: 'Record Stop', type: 'stop', variant: 'secondary' })
     }
     if (trip.status === 'STARTED' && (role === 'DRIVER' || role === 'CONDUCTOR')) {
       actions.push({ label: 'Incident', type: 'incident', variant: 'ghost' })
@@ -272,6 +314,7 @@ export default function TripsPage() {
         verify: `Verify Trip #${actionModal.trip.trip_id}`,
         cancel: `Cancel Trip #${actionModal.trip.trip_id}`,
         incident: `Report Incident — Trip #${actionModal.trip.trip_id}`,
+        stop: `Record Stop — Trip #${actionModal.trip.trip_id}`,
       }[actionModal.type]
     : ''
 
@@ -505,6 +548,85 @@ export default function TripsPage() {
               <Button variant="ghost" onClick={() => setActionModal(null)}>Cancel</Button>
               <Button loading={actionLoading} onClick={executeAction}>Report Incident</Button>
             </div>
+          </div>
+        ) : actionModal?.type === 'stop' ? (
+          <div className="space-y-4">
+            {stopInfoLoading ? (
+              <p className="text-sm text-mist animate-pulse">Loading stop info...</p>
+            ) : !stopInfo ? (
+              <p className="text-sm text-red-400">No stops found for this route.</p>
+            ) : (
+              <>
+                {/* Capacity bar */}
+                <div className="p-3 rounded-lg bg-slate-dark/50 border border-slate-light/10">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-mist">Passengers on bus</span>
+                    <span className={`font-medium ${stopInfo.current_on_bus >= stopInfo.vehicle_capacity ? 'text-red-400' : 'text-white'}`}>
+                      {stopInfo.current_on_bus} / {stopInfo.vehicle_capacity}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-light/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        stopInfo.current_on_bus >= stopInfo.vehicle_capacity ? 'bg-red-500' :
+                        (stopInfo.current_on_bus / stopInfo.vehicle_capacity) > 0.8 ? 'bg-yellow-400' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${Math.min((stopInfo.current_on_bus / stopInfo.vehicle_capacity) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Stop dropdown */}
+                <div>
+                  <label className="text-xs text-mist mb-1.5 block font-medium">Stop *</label>
+                  <select
+                    value={stopForm.stop_id}
+                    onChange={(e) => setStopForm((f) => ({ ...f, stop_id: Number(e.target.value) }))}
+                    className="w-full bg-slate-dark/80 border border-slate-light/30 rounded-lg px-4 py-3 text-sm text-white focus-ring appearance-none cursor-pointer"
+                  >
+                    <option value={0}>Select a stop...</option>
+                    {stopInfo.stops.map((s) => (
+                      <option key={s.stop_id} value={s.stop_id} disabled={s.already_recorded}>
+                        {s.sequence_no}. {s.stop_name}{s.already_recorded ? ' (already recorded)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Boarded / Alighted inputs */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Boarded"
+                    type="number"
+                    value={String(stopForm.boarded)}
+                    onChange={(e) => setStopForm((f) => ({ ...f, boarded: Math.max(0, Number(e.target.value)) }))}
+                  />
+                  <Input
+                    label="Alighted"
+                    type="number"
+                    value={String(stopForm.alighted)}
+                    onChange={(e) => setStopForm((f) => ({ ...f, alighted: Math.max(0, Number(e.target.value)) }))}
+                  />
+                </div>
+
+                {/* Live inline validation warnings */}
+                {stopForm.alighted > stopInfo.current_on_bus && (
+                  <p className="text-xs text-red-400">
+                    ⚠ Cannot alight {stopForm.alighted} — only {stopInfo.current_on_bus} on bus
+                  </p>
+                )}
+                {(stopInfo.current_on_bus + stopForm.boarded - stopForm.alighted) > stopInfo.vehicle_capacity && (
+                  <p className="text-xs text-red-400">
+                    ⚠ Would exceed vehicle capacity ({stopInfo.vehicle_capacity} seats)
+                  </p>
+                )}
+
+                <div className="flex gap-3 justify-end">
+                  <Button variant="ghost" onClick={() => setActionModal(null)}>Cancel</Button>
+                  <Button loading={actionLoading} onClick={executeAction}>Record Stop</Button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

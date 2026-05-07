@@ -82,6 +82,21 @@ export const tripsApi = {
     client.post(`/trips/${tripId}/incident`, null, {
       params: { severity, category, description },
     }),
+
+  getStopInfo: (tripId: number) =>
+    client.get<{
+      trip_id: number
+      vehicle_capacity: number
+      total_boarded: number
+      total_alighted: number
+      current_on_bus: number
+      stops: { stop_id: number; stop_name: string; sequence_no: number; already_recorded: boolean }[]
+    }>(`/trips/${tripId}/stop-info`),
+
+  recordStop: (tripId: number, stopId: number, boardedCount: number, alightedCount: number) =>
+    client.post(`/trips/${tripId}/stops/${stopId}`, null, {
+      params: { boarded_count: boardedCount, alighted_count: alightedCount },
+    }),
 }
 
 /* ---- Reports ---- */

@@ -413,7 +413,69 @@ def verify_trip(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# 4. RECORD STOP EVENT
+# 4a. STOP INFO LOOKUP (for conductor stop-recording modal)
+@router.get("/{trip_id}/stop-info")
+def get_trip_stop_info(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(["CONDUCTOR"])),
+):
+    """
+    Returns all stops on the trip's route, which ones have already been recorded,
+    and the current passenger count vs vehicle capacity.
+    Used to populate the Record Stop modal in the frontend.
+    """
+    trip = db.query(Trip).filter(Trip.trip_id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    if trip.status != "STARTED":
+        raise HTTPException(status_code=400, detail="Trip must be STARTED to record stops")
+
+    staff = db.query(Staff).filter(Staff.user_id == current_user.user_id).first()
+    if not staff or trip.conductor_staff_id != staff.staff_id:
+        raise HTTPException(status_code=403, detail="Not assigned as conductor for this trip")
+
+    vehicle = db.query(Vehicle).filter(Vehicle.vehicle_id == trip.vehicle_id).first()
+    vehicle_capacity = vehicle.capacity if vehicle else 0
+
+    stops = (
+        db.query(Stop)
+        .filter(Stop.route_id == trip.route_id)
+        .order_by(Stop.sequence_no)
+        .all()
+    )
+
+    recorded_events = (
+        db.query(TripStopEvent)
+        .filter(TripStopEvent.trip_id == trip_id)
+        .all()
+    )
+    recorded_stop_ids = {e.stop_id for e in recorded_events}
+
+    total_boarded = sum(e.boarded_count for e in recorded_events)
+    total_alighted = sum(e.alighted_count for e in recorded_events)
+    current_on_bus = total_boarded - total_alighted
+
+    return {
+        "trip_id": trip_id,
+        "vehicle_capacity": vehicle_capacity,
+        "total_boarded": total_boarded,
+        "total_alighted": total_alighted,
+        "current_on_bus": current_on_bus,
+        "stops": [
+            {
+                "stop_id": s.stop_id,
+                "stop_name": s.stop_name,
+                "sequence_no": s.sequence_no,
+                "already_recorded": s.stop_id in recorded_stop_ids,
+            }
+            for s in stops
+        ],
+    }
+
+
+# 4b. RECORD STOP EVENT
 @router.post("/{trip_id}/stops/{stop_id}")
 def record_stop_event(
     trip_id: int,
@@ -421,58 +483,96 @@ def record_stop_event(
     boarded_count: int = Query(..., ge=0),
     alighted_count: int = Query(..., ge=0),
     db: Session = Depends(get_db),
-    current_user = Depends(require_role(["CONDUCTOR"]))
+    current_user=Depends(require_role(["CONDUCTOR"])),
 ):
-    trip = db.query(Trip).filter(Trip.trip_id == trip_id).first()
+    try:
+        trip = db.query(Trip).filter(Trip.trip_id == trip_id).first()
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
 
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+        if trip.status != "STARTED":
+            raise HTTPException(status_code=400, detail="Trip must be STARTED to record a stop")
 
-    if trip.status != "STARTED":
-        raise HTTPException(status_code=400, detail="Trip must be STARTED")
+        staff = db.query(Staff).filter(Staff.user_id == current_user.user_id).first()
+        if not staff or trip.conductor_staff_id != staff.staff_id:
+            raise HTTPException(status_code=403, detail="Not assigned as conductor for this trip")
 
-    staff = db.query(Staff).filter(Staff.user_id == current_user.user_id).first()
+        stop = db.query(Stop).filter(Stop.stop_id == stop_id).first()
+        if not stop:
+            raise HTTPException(status_code=404, detail="Stop not found")
 
-    if not staff or trip.conductor_staff_id != staff.staff_id:
-        raise HTTPException(status_code=403, detail="Not assigned as conductor")
+        if stop.route_id != trip.route_id:
+            raise HTTPException(status_code=400, detail="Stop does not belong to this trip's route")
 
-    stop = db.query(Stop).filter(Stop.stop_id == stop_id).first()
+        existing = db.query(TripStopEvent).filter(
+            TripStopEvent.trip_id == trip_id,
+            TripStopEvent.stop_id == stop_id,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Stop already recorded for this trip")
 
-    if not stop:
-        raise HTTPException(status_code=404, detail="Stop not found")
+        # --- Capacity validation ---
+        vehicle = db.query(Vehicle).filter(Vehicle.vehicle_id == trip.vehicle_id).first()
+        vehicle_capacity = vehicle.capacity if vehicle else 0
 
-    if stop.route_id != trip.route_id:
-        raise HTTPException(status_code=400, detail="Stop not on trip route")
+        prior_events = db.query(TripStopEvent).filter(TripStopEvent.trip_id == trip_id).all()
+        total_boarded = sum(e.boarded_count for e in prior_events)
+        total_alighted = sum(e.alighted_count for e in prior_events)
+        current_on_bus = total_boarded - total_alighted
 
-    existing = db.query(TripStopEvent).filter(
-        TripStopEvent.trip_id == trip_id,
-        TripStopEvent.stop_id == stop_id
-    ).first()
+        if alighted_count > current_on_bus:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot alight {alighted_count} passengers — only {current_on_bus} are currently on the bus",
+            )
 
-    if existing:
-        raise HTTPException(status_code=400, detail="Stop already recorded")
+        passengers_after = current_on_bus + boarded_count - alighted_count
+        if passengers_after > vehicle_capacity:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Boarding {boarded_count} passengers would exceed vehicle capacity. "
+                    f"Current on bus: {current_on_bus}, capacity: {vehicle_capacity}. "
+                    f"Maximum boardable: {vehicle_capacity - current_on_bus + alighted_count}"
+                ),
+            )
 
-    event = TripStopEvent(
-        trip_id=trip_id,
-        stop_id=stop_id,
-        arrived_at=datetime.utcnow(),
-        departed_at=datetime.utcnow(),
-        boarded_count=boarded_count,
-        alighted_count=alighted_count
-    )
+        event = TripStopEvent(
+            trip_id=trip_id,
+            stop_id=stop_id,
+            arrived_at=datetime.utcnow(),
+            departed_at=datetime.utcnow(),
+            boarded_count=boarded_count,
+            alighted_count=alighted_count,
+        )
 
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+        db.add(event)
+        db.commit()
+        db.refresh(event)
 
-    return {
-        "success": True,
-        "message": "Stop event recorded successfully",
-        "data": {
-            "trip_id": trip_id,
-            "stop_id": stop_id
+        return {
+            "success": True,
+            "message": "Stop event recorded successfully",
+            "data": {
+                "event_id": event.event_id,
+                "trip_id": trip_id,
+                "stop_id": stop_id,
+                "stop_name": stop.stop_name,
+                "boarded_count": boarded_count,
+                "alighted_count": alighted_count,
+                "current_on_bus": passengers_after,
+                "vehicle_capacity": vehicle_capacity,
+            },
         }
-    }
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to record stop event for trip %s stop %s: %s", trip_id, stop_id, e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 
 # 5. REPORT INCIDENT
