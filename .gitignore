@@ -16,6 +16,8 @@ instructions.md
 README.docker.md
 memory.md
 guide.md
+viva_guide.md
+presentation_outline.md
 
 # Backend local verification/agent scripts
 backend/agents/

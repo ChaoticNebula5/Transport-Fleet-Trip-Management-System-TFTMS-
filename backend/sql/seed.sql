@@ -1,9 +1,4 @@
--- Seed admin user for TFTMS
--- Email: hssinghlubana11@gmail.com
--- Password: Admin@321 (bcrypt hashed)
--- This runs AFTER schema.sql via Docker entrypoint ordering
 
--- Use pgcrypto for bcrypt hashing directly in SQL
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Core users
