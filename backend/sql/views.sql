@@ -12,11 +12,21 @@ SELECT
     s.full_name AS driver_name,
     t.actual_start_time_verified,
     t.actual_end_time_verified,
-    (t.odometer_end_verified - t.odometer_start_verified) AS distance_travelled
+    (t.odometer_end_verified - t.odometer_start_verified) AS distance_travelled,
+    COALESCE(tse.stop_count, 0) AS stop_count,
+    COALESCE(tse.total_boarded, 0) AS total_boarded
 FROM trip t
 JOIN route r ON t.route_id = r.route_id
 JOIN vehicle v ON t.vehicle_id = v.vehicle_id
-JOIN staff s ON t.driver_staff_id = s.staff_id;
+JOIN staff s ON t.driver_staff_id = s.staff_id
+LEFT JOIN (
+    SELECT 
+        trip_id, 
+        COUNT(event_id) AS stop_count, 
+        SUM(boarded_count) AS total_boarded 
+    FROM trip_stop_event 
+    GROUP BY trip_id
+) tse ON t.trip_id = tse.trip_id;
 
 
 
