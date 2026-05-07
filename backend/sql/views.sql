@@ -26,6 +26,8 @@ CREATE OR REPLACE VIEW v_vehicle_utilization AS
 SELECT
     v.vehicle_id,
     v.registration_no,
+    v.model,
+    v.status,
     COUNT(t.trip_id) AS total_trips,
     SUM(
         COALESCE(t.odometer_end_verified - t.odometer_start_verified, 0)
@@ -34,7 +36,7 @@ SELECT
     MAX(t.trip_date) AS last_trip_date
 FROM vehicle v
 LEFT JOIN trip t ON v.vehicle_id = t.vehicle_id
-GROUP BY v.vehicle_id, v.registration_no;
+GROUP BY v.vehicle_id, v.registration_no, v.model, v.status;
 
 
 
